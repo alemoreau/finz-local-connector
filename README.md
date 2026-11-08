@@ -17,8 +17,15 @@ version 3.7 avec nos correctifs (`patches/`).
    ```bash
    openssl rand -base64 32 | tr '+/' '-_'
    ```
-   Dans Dokploy : une application « Dockerfile » depuis ce dépôt, la variable
-   `FINZ_LOCAL_CONNECTOR_KEY` (secret), un volume monté sur `/data`.
+   Image : `ghcr.io/alemoreau/finz-local-connector:latest` (publiée par la CI de ce dépôt).
+   Dans Dokploy : une application depuis cette image (ou « Dockerfile » depuis ce dépôt), la
+   variable `FINZ_LOCAL_CONNECTOR_KEY` (secret), un volume monté sur `/data`.
+
+   ```bash
+   docker run -d --name finz-connecteur --restart unless-stopped \
+     -e FINZ_LOCAL_CONNECTOR_KEY=<clé> -v finz-connecteur:/data \
+     ghcr.io/alemoreau/finz-local-connector:latest
+   ```
 2. Démarrez le conteneur : il tourne en service (`run`).
 3. Dans Finz, page **Connexions › Connecteur local › Relier un connecteur**, puis :
    ```bash
