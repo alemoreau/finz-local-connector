@@ -51,7 +51,7 @@ def test_ajout_d_une_banque_et_premiere_synchro(linked, monkeypatch):
     assert bank_id == bank.bank_id
     assert payload["outcome"] == "ok"
     assert payload["full_history"] is True
-    assert payload["connector_version"] == "0.1.0"
+    assert payload["connector_version"] == __import__("finz_local_connector").__version__
     assert len(payload["accounts"]) == 2
 
 

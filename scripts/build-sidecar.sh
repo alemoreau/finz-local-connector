@@ -6,13 +6,17 @@ set -eu
 TRIPLE=$1
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+# Windows (Git Bash) : chemin natif `D:/…` et séparateur `;` pour PyInstaller.
+NATIVE_ROOT=$(pwd -W 2>/dev/null || pwd)
+SEP=":"
+case "$TRIPLE" in *windows*) SEP=";" ;; esac
 [ -d vendor/woob-modules ] || sh scripts/fetch-modules.sh
 PYTHON=${PYTHON:-.venv/bin/python}
 
 "$PYTHON" -m PyInstaller --noconfirm --clean --onefile \
   --name finz-local-connector \
   --distpath build/sidecar --workpath build/pyinstaller --specpath build \
-  --add-data "$ROOT/vendor/woob-modules:woob-modules" \
+  --add-data "$NATIVE_ROOT/vendor/woob-modules${SEP}woob-modules" \
   --collect-all woob \
   --collect-submodules keyring --copy-metadata keyring \
   --collect-data pycountry --collect-data schwifty --collect-data babel \
