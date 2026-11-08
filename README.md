@@ -51,7 +51,31 @@ finz-local-connector run
 Les secrets vont dans le trousseau du système (Trousseau macOS, Gestionnaire d'identification
 Windows, Secret Service). Sans trousseau, définissez `FINZ_LOCAL_CONNECTOR_KEY`.
 
-L'application de bureau (fenêtre, icône, mises à jour automatiques) arrive ensuite.
+### Application de bureau
+
+Téléchargez l'installeur de votre système dans les
+[versions publiées](https://github.com/alemoreau/finz-local-connector/releases/latest) :
+
+| Système | Fichier |
+| --- | --- |
+| macOS (Apple Silicon) | `.dmg` |
+| Windows | `…-setup.exe` |
+| Linux | `.AppImage` ou `.deb` |
+
+L'application vit près de l'horloge : fermer la fenêtre la cache, le connecteur continue de
+synchroniser. Elle démarre avec l'ordinateur (réglable) et se met à jour seule ; les mises à
+jour sont signées par une clé de Finz.
+
+**Premier lancement.** Les installeurs ne sont pas encore signés par Apple ni Microsoft :
+
+- **macOS** : ouvrez l'application une fois, puis Réglages Système › Confidentialité et
+  sécurité › « Ouvrir quand même ».
+- **Windows** : sur l'avertissement SmartScreen, « Informations complémentaires » › « Exécuter
+  quand même ».
+- **Linux** : `chmod +x` sur le fichier `.AppImage`, ou installez le `.deb`.
+
+Les Mac Intel ne sont pas encore pris en charge par l'application (la ligne de commande
+fonctionne).
 
 ## Commandes
 
@@ -87,7 +111,11 @@ vous le signale et la banque attend un `sync` lancé par vous.
 uv venv && uv pip install -e . pytest
 scripts/fetch-modules.sh
 .venv/bin/python -m pytest
+cd desktop && npm ci && npm test     # interface de l'application de bureau
 ```
+
+Une étiquette `vX.Y.Z` publie les installeurs (`.github/workflows/release.yml`) ; la version est
+celle de `pyproject.toml`, `desktop/package.json` et `desktop/src-tauri/tauri.conf.json`.
 
 Les tests utilisent une banque factice (`tests/modules/fakebank`) et un faux Finz.
 

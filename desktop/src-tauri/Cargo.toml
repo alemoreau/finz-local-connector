@@ -1,0 +1,30 @@
+[package]
+name = "finz-local-connector-desktop"
+version = "0.1.0"
+description = "Finz Connecteur local"
+license = "LGPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "finz_local_connector_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = ["tray-icon"] }
+tauri-plugin-shell = "2.6"
+tauri-plugin-updater = "2.14"
+tauri-plugin-process = "2.4"
+tauri-plugin-notification = "2.8"
+tauri-plugin-autostart = "2.7"
+tauri-plugin-single-instance = "2.5"
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

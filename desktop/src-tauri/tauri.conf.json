@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Finz Connecteur local",
+  "version": "0.1.0",
+  "identifier": "fr.alemoreau.finz.localconnector",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Finz Connecteur local",
+        "width": 460,
+        "height": 660,
+        "minWidth": 380,
+        "minHeight": 480
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "appimage",
+      "deb"
+    ],
+    "category": "Finance",
+    "shortDescription": "Synchronise vos banques avec Finz depuis votre ordinateur.",
+    "longDescription": "Lit vos comptes bancaires sur cet ordinateur et envoie le résultat à Finz. Vos identifiants bancaires restent chez vous.",
+    "copyright": "LGPL-3.0-or-later",
+    "externalBin": [
+      "binaries/finz-local-connector"
+    ],
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/alemoreau/finz-local-connector/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGMUZGNDk5OTE4NEExQTEKUldTaG9ZU1JtZlFmengxUXVOWHhPRDNCU3N4SkRBeUNwVGUrRlJxMUxHbjBOYU5GaWRMWUw1NmkK"
+    }
+  }
+}

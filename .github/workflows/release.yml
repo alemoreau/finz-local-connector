@@ -1,0 +1,78 @@
+name: Publication
+
+# Une étiquette `vX.Y.Z` construit l'exécutable du connecteur (PyInstaller) puis l'application de
+# bureau (Tauri) sur chaque système, et publie les installeurs avec `latest.json` (updater).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            triple: aarch64-apple-darwin
+          - os: windows-2022
+            triple: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            triple: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+      - name: Connecteur figé (PyInstaller)
+        shell: bash
+        run: |
+          uv venv --python 3.13
+          uv pip install . pyinstaller
+          PY=.venv/bin/python
+          [ -f .venv/Scripts/python.exe ] && PY=.venv/Scripts/python.exe
+          PYTHON=$PY sh scripts/build-sidecar.sh ${{ matrix.triple }}
+      - name: Le connecteur figé démarre
+        shell: bash
+        run: |
+          BIN=desktop/src-tauri/binaries/finz-local-connector-${{ matrix.triple }}
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          "$BIN" --version
+          FINZ_LOCAL_CONNECTOR_KEY=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())") \
+            FINZ_LOCAL_CONNECTOR_DATA=$RUNNER_TEMP/data "$BIN" bank modules --search bourso
+
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+      - name: Interface
+        working-directory: desktop
+        run: |
+          npm ci
+          npm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Finz Connecteur local __VERSION__"
+          releaseBody: "Installeurs non signés par Apple ni Microsoft : voir « Premier lancement » dans le README."
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

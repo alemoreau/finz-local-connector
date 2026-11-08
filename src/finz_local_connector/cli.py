@@ -191,6 +191,14 @@ def cmd_run(_args) -> int:
         time.sleep(max(pause, 60))
 
 
+def cmd_serve(_args) -> int:
+    """Application de bureau : requêtes et événements en lignes JSON (`serve.py`)."""
+    from .serve import Server
+
+    Server().serve()
+    return 0
+
+
 def cmd_status(args) -> int:
     ctx = _ctx()
     if not ctx.config.linked:
@@ -271,6 +279,9 @@ def parser() -> argparse.ArgumentParser:
     sync.add_argument("--bank")
     sync.set_defaults(func=cmd_sync)
     sub.add_parser("run", help="service : synchro planifiée et demandes de Finz").set_defaults(func=cmd_run)
+    serve = sub.add_parser("serve", help=argparse.SUPPRESS)
+    serve.add_argument("--stdio", action="store_true", required=True)
+    serve.set_defaults(func=cmd_serve)
     status = sub.add_parser("status", help="état du connecteur")
     status.add_argument("--local", action="store_true", help="sans appeler Finz (contrôle de santé)")
     status.set_defaults(func=cmd_status)

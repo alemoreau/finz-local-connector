@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,9 +21,12 @@ def modules_path() -> str:
     """Dossier des modules : `FINZ_WOOB_MODULES`, sinon `vendor/woob-modules` du dépôt."""
     configured = os.environ.get("FINZ_WOOB_MODULES")
     candidates = [Path(configured)] if configured else []
+    # Exécutable figé (PyInstaller, application de bureau) : modules embarqués.
+    if bundle := getattr(sys, "_MEIPASS", None):
+        candidates.append(Path(bundle) / "woob-modules")
     candidates.append(Path(__file__).resolve().parents[2] / "vendor" / "woob-modules")
     for candidate in candidates:
-        if (candidate / "__init__.py").exists() or candidate.is_dir():
+        if candidate.is_dir():
             return str(candidate)
     raise ConnectorError(
         "Modules bancaires introuvables : lancez `scripts/fetch-modules.sh` ou définissez "

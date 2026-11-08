@@ -1,0 +1,20 @@
+{
+  "identifier": "default",
+  "description": "Fenêtre principale : connecteur embarqué, mises à jour, notifications, démarrage automatique.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/finz-local-connector", "sidecar": true, "args": ["serve", "--stdio"] }]
+    },
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
+    "updater:default",
+    "process:allow-restart",
+    "notification:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
+}
