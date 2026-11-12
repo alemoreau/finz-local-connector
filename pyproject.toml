@@ -1,6 +1,6 @@
 [project]
 name = "finz-local-connector"
-version = "0.1.5"
+version = "0.1.6"
 description = "Connecteur local de Finz : lit vos banques sur votre machine et envoie le résultat à Finz."
 readme = "README.md"
 license = "LGPL-3.0-or-later"

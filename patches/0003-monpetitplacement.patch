@@ -1,0 +1,397 @@
+--- a/modules/monpetitplacement/__init__.py
++++ b/modules/monpetitplacement/__init__.py
+@@ -0,0 +1,21 @@
++# Copyright(C) 2026      Finz
++#
++# This file is part of a woob module.
++#
++# This woob module is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This woob module is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with this woob module. If not, see <http://www.gnu.org/licenses/>.
++
++from .module import MonPetitPlacementModule
++
++
++__all__ = ["MonPetitPlacementModule"]
+--- a/modules/monpetitplacement/browser.py
++++ b/modules/monpetitplacement/browser.py
+@@ -0,0 +1,308 @@
++# Copyright(C) 2026      Finz
++#
++# This file is part of a woob module.
++#
++# This woob module is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This woob module is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with this woob module. If not, see <http://www.gnu.org/licenses/>.
++
++"""Mon Petit Placement : API JSON-LD (API Platform) derrière un Keycloak.
++
++Connexion : jeton OpenID Connect par mot de passe (client public `mpp-app`, domaine
++`mpp-prod`), sans second facteur ; les codes SMS ne servent qu'à signer des opérations.
++
++- comptes : `/v1/me` → contrats `/v1/user_investment_accounts/{id}`, assureur et type de
++  contrat (`investmentWrapper` : `life-insurance`…) ;
++- supports : `{contrat}/products_current_values`, ISIN lu sur `/v1/products/{id}` ;
++- opérations : ordres `{contrat}/invest_orders` (versements initiaux et programmés,
++  arbitrages) et factures de la commission de gestion `{contrat}/investment_bills`.
++
++Montants en euros (nombres JSON), dates ISO 8601.
++"""
++
++import time
++from decimal import Decimal
++
++from dateutil.parser import isoparse
++
++from woob.browser import LoginBrowser, need_login
++from woob.browser.exceptions import ClientError
++from woob.capabilities.bank import Account, Transaction
++from woob.capabilities.bank.wealth import Investment
++from woob.capabilities.base import NotAvailable
++from woob.exceptions import ActionNeeded, BrowserIncorrectPassword, BrowserUnavailable
++from woob.tools.capabilities.bank.investments import is_isin_valid
++
++
++__all__ = ["MonPetitPlacementBrowser"]
++
++
++# `investmentWrapper` du type de contrat → type woob. Seul `life-insurance` est observé ; les
++# autres enveloppes de Mon Petit Placement (PER, capitalisation) sont reconnues par mot-clé.
++ACCOUNT_TYPE_KEYWORDS = (
++    ("retirement", Account.TYPE_PER),
++    ("per", Account.TYPE_PER),
++    ("capitali", Account.TYPE_CAPITALISATION),
++    ("life", Account.TYPE_LIFE_INSURANCE),
++)
++
++
++def account_type(wrapper):
++    parts = wrapper.lower().replace("_", "-").split("-")
++    for keyword, kind in ACCOUNT_TYPE_KEYWORDS:
++        if any(part.startswith(keyword) for part in parts):
++            return kind
++    return Account.TYPE_LIFE_INSURANCE
++
++ORDER_LABELS = {
++    "initial-investment": "Versement initial",
++    "monthly-investment": "Versement programmé",
++    "free-investment": "Versement libre",
++    "additional-investment": "Versement libre",
++}
++
++# Ordres sans flux d'argent entre le contrat et l'extérieur : répartition entre supports.
++INTERNAL_ORDERS = {"exchange"}
++
++
++def to_decimal(value):
++    if value is None or value == "":
++        return NotAvailable
++    return Decimal(str(value))
++
++
++def to_date(value):
++    if not value:
++        return NotAvailable
++    return isoparse(value).date()
++
++
++class MonPetitPlacementBrowser(LoginBrowser):
++    BASEURL = "https://api.monpetitplacement.fr"
++    TOKEN_URL = "https://sso.monpetitplacement.fr/realms/mpp-prod/protocol/openid-connect/token"
++    CLIENT_ID = "mpp-app"
++    # Marge avant l'expiration du jeton, en secondes.
++    TOKEN_MARGIN = 30
++
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self.access_token = None
++        self.token_expires_at = 0
++        self.products = {}
++        self.accounts_by_id = {}
++
++    @property
++    def logged(self):
++        return self.access_token is not None and time.time() < self.token_expires_at
++
++    def do_login(self):
++        self.access_token = None
++        try:
++            response = self.open(
++                self.TOKEN_URL,
++                data={
++                    "client_id": self.CLIENT_ID,
++                    "grant_type": "password",
++                    "username": self.username.strip().lower(),
++                    "password": self.password,
++                },
++            )
++        except ClientError as error:
++            self.raise_login_error(error.response)
++        token = response.json()
++        self.access_token = token["access_token"]
++        self.token_expires_at = time.time() + int(token.get("expires_in", 300)) - self.TOKEN_MARGIN
++
++    def raise_login_error(self, response):
++        try:
++            payload = response.json()
++        except ValueError:
++            payload = {}
++        description = payload.get("error_description") or ""
++        if payload.get("error") == "invalid_grant":
++            if "credentials" in description.lower():
++                raise BrowserIncorrectPassword(description)
++            # Compte désactivé ou action requise (e-mail à vérifier, mot de passe à changer).
++            raise ActionNeeded(description or "Connectez-vous sur monpetitplacement.fr.")
++        raise BrowserUnavailable(description or f"Connexion refusée ({response.status_code}).")
++
++    def build_request(self, *args, **kwargs):
++        headers = kwargs.setdefault("headers", {})
++        headers.setdefault("Accept", "application/ld+json")
++        if self.access_token:
++            headers["Authorization"] = f"Bearer {self.access_token}"
++        return super().build_request(*args, **kwargs)
++
++    def get_json(self, path, params=None):
++        if not self.logged:
++            self.do_login()
++        try:
++            return self.open(path, params=params).json()
++        except ClientError as error:
++            if error.response.status_code != 401:
++                raise
++            self.do_login()
++            return self.open(path, params=params).json()
++
++    def iter_collection(self, path, params=None):
++        page = self.get_json(path, params)
++        while True:
++            yield from page.get("hydra:member", [])
++            following = (page.get("hydra:view") or {}).get("hydra:next")
++            if not following:
++                return
++            page = self.get_json(following)
++
++    def get_product(self, iri):
++        if iri not in self.products:
++            self.products[iri] = self.get_json(iri)
++        return self.products[iri]
++
++    @need_login
++    def iter_accounts(self):
++        me = self.get_json("/v1/me")
++        iris = list(me.get("userInvestmentAccounts") or []) + list(
++            me.get("proxyUserInvestmentAccounts") or []
++        )
++        for iri in iris:
++            data = self.get_json(iri)
++            if data.get("hidden") or data.get("status") != "active":
++                continue
++            account = self.build_account(iri, data)
++            self.accounts_by_id[account.id] = account
++            yield account
++
++    def build_account(self, iri, data):
++        contract_type = self.get_json(data["providerContractType"])
++        provider = self.get_json(data["provider"]) if data.get("provider") else {}
++        contract_number = data.get("providerContractId")
++
++        account = Account()
++        account.id = str(contract_number or data["id"])
++        account.number = str(contract_number) if contract_number else NotAvailable
++        name = contract_type.get("name") or "Contrat"
++        insurer = provider.get("name")
++        account.label = f"{name} ({insurer})" if insurer else name
++        account.type = account_type(contract_type.get("investmentWrapper") or "")
++        account.currency = "EUR"
++        account.opening_date = to_date(data.get("effectiveDate") or data.get("subscriptionDate"))
++        compartments = self.iter_collection(f"{iri}/investment_compartments")
++        account.balance = sum((to_decimal(c.get("amount")) or Decimal(0) for c in compartments), Decimal(0))
++        account._iri = iri
++        return account
++
++    def account_iri(self, account):
++        iri = getattr(account, "_iri", None)
++        if iri:
++            return iri
++        if not self.accounts_by_id:
++            list(self.iter_accounts())
++        return self.accounts_by_id[account.id]._iri
++
++    @need_login
++    def iter_investment(self, account):
++        iri = self.account_iri(account)
++        params = {"order[amount]": "desc"}
++        for value in self.iter_collection(f"{iri}/products_current_values", params):
++            product = value.get("product") or {}
++            details = self.get_product(product["@id"]) if product.get("@id") else {}
++
++            inv = Investment()
++            inv.label = product.get("name") or details.get("name")
++            isin = details.get("isin")
++            if isin and is_isin_valid(isin):
++                inv.code = isin
++                inv.code_type = Investment.CODE_TYPE_ISIN
++            else:
++                inv.code = inv.code_type = NotAvailable
++            inv.valuation = to_decimal(value.get("amount"))
++            inv.quantity = to_decimal(value.get("securityUnits"))
++            inv.unitprice = to_decimal(value.get("averageAcquisitionAmount"))
++            if inv.quantity and inv.valuation is not NotAvailable:
++                inv.unitvalue = (inv.valuation / inv.quantity).quantize(Decimal("0.0001"))
++            inv.vdate = to_date(value.get("date"))
++            if value.get("performance") is not None:
++                inv.diff_ratio = to_decimal(value["performance"]) / 100
++            yield inv
++
++    @need_login
++    def iter_history(self, account):
++        return [tr for tr in self.iter_transactions(account) if not tr.coming]
++
++    @need_login
++    def iter_coming(self, account):
++        return [tr for tr in self.iter_transactions(account) if tr.coming]
++
++    def iter_transactions(self, account):
++        iri = self.account_iri(account)
++        transactions = [
++            tr
++            for order in self.iter_collection(f"{iri}/invest_orders")
++            if (tr := self.order_transaction(order)) is not None
++        ]
++        transactions += [
++            tr for bill in self.iter_collection(f"{iri}/investment_bills") if (tr := self.bill_transaction(bill))
++        ]
++        return sorted(transactions, key=lambda tr: tr.date, reverse=True)
++
++    def order_transaction(self, order):
++        if order.get("type") in INTERNAL_ORDERS or order.get("status") in ("canceled", "cancelled", "rejected"):
++            return None
++        amount = to_decimal(order.get("amountDebited")) or to_decimal(order.get("amountOrdered"))
++        day = to_date(order.get("valuatedAt") or order.get("processedAt") or order.get("createdAt"))
++        if not amount or not day:
++            return None
++
++        tr = Transaction()
++        tr.id = order["id"]
++        if order.get("type") == "buy":
++            tr.type = Transaction.TYPE_DEPOSIT
++            tr.label = ORDER_LABELS.get(order.get("subType"), "Versement")
++        else:
++            tr.type = Transaction.TYPE_WITHDRAWAL
++            tr.label = "Rachat"
++            amount = -amount
++        tr.amount = amount
++        tr.date = tr.vdate = day
++        tr.rdate = to_date(order.get("createdAt")) or day
++        tr.raw = tr.label
++        tr.coming = order.get("status") != "completed"
++        tr.investments = list(self.order_investments(order))
++        return tr
++
++    def order_investments(self, order):
++        for detail in order.get("investOrderDetails") or []:
++            product = detail.get("product") or {}
++            inv = Investment()
++            inv.label = product.get("name")
++            isin = product.get("isin")
++            if isin and is_isin_valid(isin):
++                inv.code = isin
++                inv.code_type = Investment.CODE_TYPE_ISIN
++            inv.valuation = to_decimal(detail.get("amountDebited"))
++            inv.quantity = to_decimal(detail.get("securityUnitReceived"))
++            inv.unitvalue = to_decimal(detail.get("securityUnitValue"))
++            yield inv
++
++    def bill_transaction(self, bill):
++        amount = to_decimal(bill.get("totalIncludingTax"))
++        day = to_date(bill.get("endAt") or bill.get("createdAt"))
++        if not amount or not day:
++            return None
++        tr = Transaction()
++        tr.id = bill["id"]
++        tr.type = Transaction.TYPE_BANK
++        tr.label = tr.raw = "Commission de gestion Mon Petit Placement"
++        tr.amount = -amount
++        tr.date = tr.rdate = tr.vdate = day
++        tr.coming = False
++        return tr
+--- a/modules/monpetitplacement/module.py
++++ b/modules/monpetitplacement/module.py
+@@ -0,0 +1,55 @@
++# Copyright(C) 2026      Finz
++#
++# This file is part of a woob module.
++#
++# This woob module is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This woob module is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with this woob module. If not, see <http://www.gnu.org/licenses/>.
++
++from woob.capabilities.bank.wealth import CapBankWealth
++from woob.tools.backend import BackendConfig, Module
++from woob.tools.value import ValueBackendPassword
++
++from .browser import MonPetitPlacementBrowser
++
++
++__all__ = ["MonPetitPlacementModule"]
++
++
++class MonPetitPlacementModule(Module, CapBankWealth):
++    NAME = "monpetitplacement"
++    DESCRIPTION = "Mon Petit Placement"
++    MAINTAINER = "Finz"
++    EMAIL = "noreply@finz.invalid"
++    LICENSE = "LGPLv3+"
++
++    BROWSER = MonPetitPlacementBrowser
++
++    CONFIG = BackendConfig(
++        ValueBackendPassword("login", label="E-mail", masked=False, regexp=".+@.+"),
++        ValueBackendPassword("password", label="Mot de passe"),
++    )
++
++    def create_default_browser(self):
++        return self.create_browser(self.config["login"].get(), self.config["password"].get())
++
++    def iter_accounts(self):
++        return self.browser.iter_accounts()
++
++    def iter_history(self, account):
++        return self.browser.iter_history(account)
++
++    def iter_coming(self, account):
++        return self.browser.iter_coming(account)
++
++    def iter_investment(self, account):
++        return self.browser.iter_investment(account)
+--- a/modules/monpetitplacement/requirements.txt
++++ b/modules/monpetitplacement/requirements.txt
+@@ -0,0 +1 @@
++woob ~= 3.6

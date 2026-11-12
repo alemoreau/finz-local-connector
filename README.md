@@ -5,9 +5,13 @@ le résultat à [Finz](https://app.finz.alemoreau.fr). Vos identifiants bancaire
 jamais votre machine : Finz ne reçoit que les comptes, les opérations, les positions et les
 ordres.
 
-La lecture des sites des banques est faite par [woob](https://woob.tech) (LGPL), figé à la
+La lecture des sites des banques est faite par [woob](https://woob.tech) (LGPL), figé à
 un commit précis de sa branche principale (`scripts/fetch-modules.sh`, le même pour le
-moteur et les modules bancaires), avec nos correctifs (`patches/`).
+moteur et les modules bancaires), avec nos correctifs (`patches/`). Les correctifs ajoutent
+aussi des modules absents de woob : `monpetitplacement` (Mon Petit Placement).
+
+Pour vérifier une banque sans rien envoyer à Finz : `uv run python scripts/dry_run_bank.py
+<module>` affiche les comptes, le nombre de supports et d'opérations, sans aucun montant.
 
 ## Installation
 
