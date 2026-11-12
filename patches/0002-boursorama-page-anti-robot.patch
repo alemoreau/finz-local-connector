@@ -1,6 +1,0 @@
---- a/modules/boursorama/pages.py
-+++ b/modules/boursorama/pages.py
-@@ -309,2 +309,2 @@
-     def is_html_loaded(self):
--        return HasElement('//title')(self.doc)
-+        return HasElement('//form')(self.doc)

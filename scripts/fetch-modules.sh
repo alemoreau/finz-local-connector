@@ -1,8 +1,9 @@
 #!/bin/sh
-# Modules bancaires de woob à la version figée, avec nos correctifs (patches/).
+# Modules bancaires de woob au commit figé (le même que le paquet woob de pyproject.toml), avec nos correctifs (patches/).
 # Usage : scripts/fetch-modules.sh [dossier]   (défaut : vendor/woob-modules)
 set -eu
-WOOB_VERSION=3.7
+# Le tag 3.7 date d'octobre 2024 : ses modules ne suivent plus les sites des banques.
+WOOB_VERSION=70ac33dc5b2b399b498415e009121cbe9d426692
 DEST=${1:-vendor/woob-modules}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)

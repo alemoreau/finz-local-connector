@@ -6,7 +6,8 @@ jamais votre machine : Finz ne reçoit que les comptes, les opérations, les pos
 ordres.
 
 La lecture des sites des banques est faite par [woob](https://woob.tech) (LGPL), figé à la
-version 3.7 avec nos correctifs (`patches/`).
+un commit précis de sa branche principale (`scripts/fetch-modules.sh`, le même pour le
+moteur et les modules bancaires), avec nos correctifs (`patches/`).
 
 ## Installation
 
@@ -121,5 +122,5 @@ Les tests utilisent une banque factice (`tests/modules/fakebank`) et un faux Fin
 
 ## Licence
 
-LGPL-3.0-or-later, comme woob. Sources de woob : <https://gitlab.com/woob/woob> (version 3.7) ;
+LGPL-3.0-or-later, comme woob. Sources de woob : <https://gitlab.com/woob/woob> (commit figé dans `scripts/fetch-modules.sh`) ;
 nos correctifs sont dans `patches/`.

@@ -37,3 +37,15 @@ def test_boursorama_page_d_attente_anti_robot_pas_encore_chargee(boursorama_page
 def test_boursorama_page_de_connexion_chargee(boursorama_pages):
     page = SimpleNamespace(doc=lxml.html.fromstring(LOGIN))
     assert boursorama_pages.PasswordPage.is_html_loaded(page) is True
+
+
+def test_boursorama_page_d_un_compte_courant_reconnue(boursorama_pages):
+    # Woob 3.7 n'attendait que `/compte/cav/<id>/mouvements` : l'adresse d'un compte sans
+    # `/mouvements` ne donnait aucune page (AttributeError sur `fill_account`).
+    from woob.core import WoobBase
+
+    backend = WoobBase(modules_path=str(MODULES)).build_backend(
+        "boursorama", params={"login": "0", "password": "0"}, name="test"
+    )
+    browser = backend.browser
+    assert browser.history.match(browser.BASEURL + "/compte/cav/0123abcd/")
