@@ -54,6 +54,9 @@ def test_un_compte_illisible_n_empeche_pas_les_autres(storage):
     reading = read(storage, params={"scenario": "pea_broken"})
     assert reading.account_errors == {"PEA01": "connector"}
     assert len(reading.history["CC001"]) == 4
+    # L'historique illisible n'emporte pas les positions ni les ordres du compte.
+    assert [i["code"] for i in reading.investments["PEA01"]] == ["LU1681043599"]
+    assert [o["id"] for o in reading.market_orders["PEA01"]] == ["ORD1"]
 
 
 def test_identifiants_refuses(storage):

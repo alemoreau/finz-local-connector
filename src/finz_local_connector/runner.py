@@ -106,29 +106,33 @@ def _read(backend, since: date | None) -> Reading:
         # Appel direct du backend (sans `woob.do`) : `backend` n'est pas renseigné sur les
         # objets, l'identifiant sérialisé est celui de la banque.
         key = account.id
-        try:
-            reading.history[key] = _plain(_history(backend, account, since))
-            if wealth and getattr(account, "type", None) in WEALTH_TYPES:
-                reading.investments[key] = _plain(
-                    _optional(lambda a=account: backend.iter_investment(a))
-                )
-                reading.market_orders[key] = _plain(
-                    _optional(lambda a=account: backend.iter_market_orders(a))
-                )
-        except (BrowserInteraction, NeedInteractive):
-            raise
-        except Exception as error:  # un compte illisible n'empêche pas les autres
-            reading.account_errors[key] = errors.kind(error)
-            # Trace complète dans le journal local seulement (Finz ne reçoit que le type), avec
-            # la forme de la dernière adresse visitée (identifiants masqués) : une page que le
-            # module ne reconnaît plus se diagnostique ainsi.
-            log.warning(
-                "compte illisible : %s (page %s)",
-                type(error).__name__,
-                _page_shape(backend),
-                exc_info=True,
-            )
+        # Chaque lecture à part : un historique illisible n'emporte pas les positions.
+        _part(reading, reading.history, account, backend, lambda a=account: _history(backend, a, since))
+        if wealth and getattr(account, "type", None) in WEALTH_TYPES:
+            _part(reading, reading.investments, account, backend,
+                  lambda a=account: _optional(lambda: backend.iter_investment(a)))
+            _part(reading, reading.market_orders, account, backend,
+                  lambda a=account: _optional(lambda: backend.iter_market_orders(a)))
     return reading
+
+
+def _part(reading: Reading, into: dict, account, backend, call: Callable[[], object]) -> None:
+    """Une lecture d'un compte ; en cas d'échec, le type d'erreur (le premier) est noté."""
+    try:
+        into[account.id] = _plain(call())
+    except (BrowserInteraction, NeedInteractive):
+        raise
+    except Exception as error:  # une lecture illisible n'empêche pas les autres
+        reading.account_errors.setdefault(account.id, errors.kind(error))
+        # Trace complète dans le journal local seulement (Finz ne reçoit que le type), avec
+        # la forme de la dernière adresse visitée (identifiants masqués) : une page que le
+        # module ne reconnaît plus se diagnostique ainsi.
+        log.warning(
+            "compte illisible : %s (page %s)",
+            type(error).__name__,
+            _page_shape(backend),
+            exc_info=True,
+        )
 
 
 def read_bank(

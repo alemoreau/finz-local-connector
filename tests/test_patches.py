@@ -49,3 +49,24 @@ def test_boursorama_page_d_un_compte_courant_reconnue(boursorama_pages):
     )
     browser = backend.browser
     assert browser.history.match(browser.BASEURL + "/compte/cav/0123abcd/")
+
+
+def test_boursorama_historique_d_un_pea_lu_comme_un_compte_titres(boursorama_pages):
+    # Woob ne route vers la lecture des comptes titres que marché, assurance-vie et PER : la
+    # page « mouvements » d'un PEA, lue comme celle d'un compte courant, levait AttributeError.
+    import inspect
+
+    from woob.capabilities.bank import Account
+    from woob.core import WoobBase
+
+    backend = WoobBase(modules_path=str(MODULES)).build_backend(
+        "boursorama", params={"login": "0", "password": "0"}, name="test"
+    )
+    browser = backend.browser
+    browser.get_invest_transactions = lambda account, coming: ["lecture compte titres"]
+    browser.get_regular_transactions = lambda account, coming: ["lecture compte courant"]
+    get_history = inspect.unwrap(type(browser).get_history)
+
+    pea = Account(id="PEA01", url=browser.BASEURL + "/compte/pea/0123abcd/")
+    pea.type, pea.label = Account.TYPE_PEA, "PEA"
+    assert list(get_history(browser, pea)) == ["lecture compte titres"]

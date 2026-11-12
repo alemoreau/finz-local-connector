@@ -1,6 +1,6 @@
 [package]
 name = "finz-local-connector-desktop"
-version = "0.1.4"
+version = "0.1.5"
 description = "Finz Connecteur local"
 license = "LGPL-3.0-or-later"
 edition = "2021"
