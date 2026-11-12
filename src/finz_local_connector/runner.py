@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from urllib.parse import urlsplit
 
 from woob.capabilities.bank import CapBank
 from woob.capabilities.bank.wealth import CapBankWealth
@@ -78,6 +80,15 @@ def _history(backend, account, since: date | None) -> list:
     return kept
 
 
+def _page_shape(backend) -> str:
+    """Chemin de la dernière page du navigateur, segments d'identifiants remplacés par `<id>`."""
+    try:
+        path = urlsplit(backend.browser.url or "").path
+    except Exception:
+        return "?"
+    return re.sub(r"/[^/]*\d[^/]*", "/<id>", path) or "/"
+
+
 def _optional(call: Callable[[], object]) -> list:
     try:
         return list(call())
@@ -108,7 +119,15 @@ def _read(backend, since: date | None) -> Reading:
             raise
         except Exception as error:  # un compte illisible n'empêche pas les autres
             reading.account_errors[key] = errors.kind(error)
-            log.warning("compte illisible : %s", type(error).__name__)
+            # Trace complète dans le journal local seulement (Finz ne reçoit que le type), avec
+            # la forme de la dernière adresse visitée (identifiants masqués) : une page que le
+            # module ne reconnaît plus se diagnostique ainsi.
+            log.warning(
+                "compte illisible : %s (page %s)",
+                type(error).__name__,
+                _page_shape(backend),
+                exc_info=True,
+            )
     return reading
 
 

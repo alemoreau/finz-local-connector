@@ -88,3 +88,13 @@ def test_validation_dans_l_application(storage):
     reading = read(storage, params={"scenario": "app"}, interactive=True, ask=lambda v: "", notify=messages.append)
     assert messages == ["Validez la connexion dans l'application Fakebank."]
     assert len(reading.accounts) == 2
+
+
+def test_forme_de_l_adresse_sans_identifiants():
+    from types import SimpleNamespace
+
+    from finz_local_connector.runner import _page_shape
+
+    browser = SimpleNamespace(url="https://clients.boursobank.com/compte/pea/9a8b7c6d5e4f/positions?x=1")
+    assert _page_shape(SimpleNamespace(browser=browser)) == "/compte/pea/<id>/positions"
+    assert _page_shape(SimpleNamespace()) == "?"
