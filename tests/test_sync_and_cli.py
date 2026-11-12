@@ -121,3 +121,10 @@ def test_retrait_d_une_banque(linked, monkeypatch):
     assert cfg.load().banks == []
     assert bank.bank_id not in linked.banks
     assert open_vault(cfg.data_dir()).get(f"bank:{bank.bank_id}") is None
+
+
+def test_controle_de_sante_conteneur_non_relie(env):
+    # `status --local` est le HEALTHCHECK de l'image : un conteneur pas encore relié est sain,
+    # sinon l'orchestrateur le redémarre en boucle avant même la liaison.
+    assert cli.main(["status", "--local"]) == 0
+    assert cli.main(["status"]) == 1

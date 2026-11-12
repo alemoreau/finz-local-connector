@@ -203,7 +203,8 @@ def cmd_status(args) -> int:
     ctx = _ctx()
     if not ctx.config.linked:
         print("Non relié à Finz.")
-        return 1
+        # `--local` sert de contrôle de santé : non relié n'est pas une panne.
+        return 0 if args.local else 1
     print(f"Relié à {ctx.config.finz_url} ({ctx.config.household_name or '—'}), version {__version__}.")
     if not args.local:
         status = ctx.client.status()
