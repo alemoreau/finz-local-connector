@@ -1,0 +1,67 @@
+--- a/modules/boursorama/browser.py
++++ b/modules/boursorama/browser.py
+@@ -124,6 +124,7 @@
+     RecipientsPage,
+     SavingMarketPage,
+     StatusPage,
++    ScpiPage,
+     TncPage,
+     TransferAccounts,
+     TransferCharacteristics,
+@@ -293,6 +294,8 @@
+         r"/compte/pea-pme/.*/mouvements",
+         SavingMarketPage,
+     )
++    # Avant `market`, qui attrape aussi les pages d'un compte SCPI.
++    scpi = URL(r"/compte/scpi/.*/(positions|mouvements)", ScpiPage)
+     market = URL(
+         r"/compte/(?!assurance|cav|epargne).*/(positions|mouvements|ordres)", r"/compte/ord/.*/positions", MarketPage
+     )
+--- a/modules/boursorama/pages.py
++++ b/modules/boursorama/pages.py
+@@ -401,6 +401,7 @@
+     "per": Account.TYPE_PER,
+     "av": Account.TYPE_LIFE_INSURANCE,
+     "crowdfunding immobilier": Account.TYPE_REAL_ESTATE,
++    "scpi": Account.TYPE_REAL_ESTATE,
+ }
+ 
+ ACCOUNT_OWNERS = {
+@@ -1456,6 +1457,37 @@
+         )(self.doc)
+ 
+ 
++class ScpiPage(MarketPage):
++    """Compte SCPI : solde et numéro comme un compte titres, parts lues dans « Positions »."""
++
++    @method
++    class iter_investment(TableElement):
++        item_xpath = '//table[.//th[contains(., "Nombre total de parts")]]/tbody/tr'
++        head_xpath = '//table[.//th[contains(., "Nombre total de parts")]]/thead/tr/th'
++
++        col_label = "SCPI"
++        col_quantity = "Nombre total de parts"
++        col_valuation = re.compile(r"^Valorisation totale")
++
++        class item(ItemElement):
++            klass = Investment
++
++            obj_label = Base(TableCell("label"), CleanText('.//span[contains(@class, "c-link__label")]'))
++            obj_code = Base(
++                TableCell("label"), CleanText('.//span[contains(@class, "c-table__mention")]', default=NotAvailable)
++            )
++            obj_quantity = CleanDecimal.French(TableCell("quantity"))
++            # Valeur de retrait, d'après la note du tableau.
++            obj_valuation = CleanDecimal.French(TableCell("valuation"))
++
++            def obj_unitvalue(self):
++                quantity = Field("quantity")(self)
++                if not quantity:
++                    return NotAvailable
++                # Sans arrondi : parts × valeur doit redonner la valorisation lue.
++                return Field("valuation")(self) / quantity
++
++
+ class TncPage(HTMLPage):
+     @method
+     class fill_account(ItemElement):

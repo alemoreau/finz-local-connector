@@ -8,7 +8,8 @@ ordres.
 La lecture des sites des banques est faite par [woob](https://woob.tech) (LGPL), figé à
 un commit précis de sa branche principale (`scripts/fetch-modules.sh`, le même pour le
 moteur et les modules bancaires), avec nos correctifs (`patches/`). Les correctifs ajoutent
-aussi des modules absents de woob : `monpetitplacement` (Mon Petit Placement).
+aussi des modules absents de woob : `monpetitplacement` (Mon Petit Placement), et ce que woob
+ne lit pas : les parts des comptes SCPI de BoursoBank.
 
 Pour vérifier une banque sans rien envoyer à Finz : `uv run python scripts/dry_run_bank.py
 <module>` affiche les comptes, le nombre de supports et d'opérations, sans aucun montant.
